@@ -3,7 +3,7 @@ fn main() -> std::io::Result<()> {
 	let images = |path| -> std::io::Result<_> {
 		let images = std::fs::read(path)?;
 		let images = &images[4*std::mem::size_of::<u32>()..];
-		let images = Vec::from_iter(images.array_chunks::<{28*28}>().map(|image| 
+		let images = Vec::from_iter(images.array_chunks::<{28*28}>().map(|image|
 			image.map(|u8| f64::from(u8)/255.)
 		));
 		Ok(images)
@@ -26,7 +26,7 @@ fn main() -> std::io::Result<()> {
 
 	let (train_images, train_labels) = set("train")?;
 	let train = || train_images.iter().zip(&train_labels);
-	
+
 	// Mean example
 	let mut mean_examples = [[0.; 28*28]; 10];
 	let mut label_example_count = [0; 10];
@@ -49,9 +49,9 @@ fn main() -> std::io::Result<()> {
 		let sum = y.iter().sum::<f64>();
 		y.map(|y| y/sum)
 	};
-	
+
 	let start = std::time::Instant::now();
-	for _ in 0..1 {
+	for _ in 0..6 {
 		for (x, &y) in train() {
 			let ey: [_; 10] = std::array::from_fn(|k| if k == y { 1. } else { 0. });
 			let F = F(&theta, &b, x);
@@ -68,11 +68,11 @@ fn main() -> std::io::Result<()> {
 	let (images, labels) = set("t10k")?;
 	let matches = images.iter().zip(labels.iter()).filter(|&(image, label)| {
 		let sq = |x| x*x;
-		fn max_position(iter: impl IntoIterator<Item=f64>) -> usize { 
+		fn max_position(iter: impl IntoIterator<Item=f64>) -> usize {
 			iter.into_iter().enumerate().max_by(|(_, a),(_, b)| f64::total_cmp(a,b)).map(|(i,_)| i).unwrap()
 		}
 		let distance = |a: &[f64; _], b| a.iter().zip(b).map(|(a,b)| sq(a-b)).sum::<f64>();
-		let prediction = match "feedforward" { 
+		let prediction = match "feedforward" {
 			"nearest" => { // 82%
 				let prediction = mean_examples.each_ref().map(|example| -distance(example, image));
 				max_position(prediction)
