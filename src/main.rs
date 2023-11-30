@@ -41,20 +41,25 @@ fn main() -> std::io::Result<()> {
 	};
 
 	let start = std::time::Instant::now();
-	for _ in 0..6 {
+	let batch_size = 10;
+	let epochs = 6;
+	let iterations = epochs*train.len()/batch_size;
+	for _ in 0..iterations {
 		let (mut G_theta, mut G_b) = ([[0.; 28*28]; 10], [0.; 10]);
-		let batch_size = 10;
+		//let mut loss = 0.;
 		for _ in 0..batch_size {
 			let &(ref x, y) = train.choose(&mut thread_rng()).unwrap();
 			let F = F(&theta, &b, x);
+			//loss += -f64::ln(F[y]);
 			for i in 0..10 {
-				let ey_i= if i == y { 1. } else { 0. };
+				let ey_i = if i == y { 1. } else { 0. };
 				for j in 0..28*28 {
-					G_theta[i][j] += -(ey_i - F[i]*x[j]);
+					G_theta[i][j] += -(ey_i - F[i])*x[j];
 				}
 				G_b[i] += -(ey_i - F[i]);
 			}
 		}
+		//if iterations%10 == 0 { println!("{loss}"); }
 		let learn_rate = 0.005;
 		for i in 0..10 {
 			for j in 0..28*28 {
