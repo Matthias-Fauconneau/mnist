@@ -1,5 +1,5 @@
 #![feature(array_chunks, generic_arg_infer, array_methods)]#![allow(non_snake_case)]
-use rand::{Rng, thread_rng};
+use rand::{Rng, thread_rng, seq::SliceRandom};
 
 fn main() -> std::io::Result<()> {
 	let images = |path| -> std::io::Result<_> {
@@ -19,14 +19,14 @@ fn main() -> std::io::Result<()> {
 		Ok(labels)
 	};
 
-	let set = |name| -> std::io::Result<_> {
+	let set = |name| -> std::io::Result<Vec<(_, _)>> {
 		let images = images(format!("{name}-images-idx3-ubyte"))?;
 		let labels = labels(format!("{name}-labels-idx1-ubyte"))?;
 		assert_eq!(images.len(), labels.len());
-		Ok((images, labels))
+		Ok(images.into_iter().zip(labels).collect())
 	};
 
-	let (train_images, train_labels) = set("train")?;
+	let train = set("train")?;
 
 	// Stochastic gradient descent for the logistic regression model
 	fn rand<const N: usize>() -> [f64; N] {thread_rng().gen::<[_; _]>().map(|u:f64| u*2.-1.)}
@@ -45,8 +45,7 @@ fn main() -> std::io::Result<()> {
 		let (mut G_theta, mut G_b) = ([[0.; 28*28]; 10], [0.; 10]);
 		let batch_size = 10;
 		for _ in 0..batch_size {
-			let index = thread_rng().gen_range(0..10);
-			let (ref x, y) = (train_images[index], train_labels[index]);
+			let &(ref x, y) = train.choose(&mut thread_rng()).unwrap();
 			let F = F(&theta, &b, x);
 			for i in 0..10 {
 				let ey_i= if i == y { 1. } else { 0. };
@@ -66,8 +65,8 @@ fn main() -> std::io::Result<()> {
 	}
 	println!("{}s", start.elapsed().as_secs());
 
-	let (images, labels) = set("t10k")?;
-	let matches = images.iter().zip(labels.iter()).filter(|&(image, label)| {
+	let t10k = set("t10k")?;
+	let matches = t10k.iter().filter(|&(image, label)| {
 		fn max_position(iter: impl IntoIterator<Item=f64>) -> usize {
 			iter.into_iter().enumerate().max_by(|(_, a),(_, b)| f64::total_cmp(a,b)).map(|(i,_)| i).unwrap()
 		}
@@ -75,6 +74,6 @@ fn main() -> std::io::Result<()> {
 		let prediction = max_position(prediction);
 		prediction == *label
 	}).count();
-	println!("{matches}/{} = {}%", labels.len(), matches as f64/labels.len() as f64*100.);
+	println!("{matches}/{} = {}%", t10k.len(), matches as f64/t10k.len() as f64*100.);
 	Ok(())
 }
