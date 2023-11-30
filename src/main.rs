@@ -1,4 +1,6 @@
 #![feature(array_chunks, generic_arg_infer, array_methods)]#![allow(non_snake_case)]
+use rand::{Rng, thread_rng};
+
 fn main() -> std::io::Result<()> {
 	let images = |path| -> std::io::Result<_> {
 		let images = std::fs::read(path)?;
@@ -25,21 +27,9 @@ fn main() -> std::io::Result<()> {
 	};
 
 	let (train_images, train_labels) = set("train")?;
-	let train = || train_images.iter().zip(&train_labels);
-
-	// Mean example
-	let mut mean_examples = [[0.; 28*28]; 10];
-	let mut label_example_count = [0; 10];
-	for (image, &label) in train() {
-		for j in 0..28*28 { mean_examples[label][j] += image[j]; }
-		label_example_count[label] += 1;
-	}
-	for label in 0..10 {
-		for j in 0..28*28 { mean_examples[label][j] /= label_example_count[label] as f64; }
-	}
 
 	// Stochastic gradient descent for the logistic regression model
-	fn rand<const N: usize>() -> [f64; N] {use rand::Rng; rand::thread_rng().gen::<[_; _]>().map(|u:f64| u*2.-1.)}
+	fn rand<const N: usize>() -> [f64; N] {thread_rng().gen::<[_; _]>().map(|u:f64| u*2.-1.)}
 	let mut theta : [[f64; 28*28]; 10] = [(); 10].map(|_| rand());
 	let mut b: [f64; 10] = rand();
 
@@ -52,44 +42,37 @@ fn main() -> std::io::Result<()> {
 
 	let start = std::time::Instant::now();
 	for _ in 0..6 {
-		for (x, &y) in train() {
-			let ey: [_; 10] = std::array::from_fn(|k| if k == y { 1. } else { 0. });
+		let (mut G_theta, mut G_b) = ([[0.; 28*28]; 10], [0.; 10]);
+		let batch_size = 10;
+		for _ in 0..batch_size {
+			let index = thread_rng().gen_range(0..10);
+			let (ref x, y) = (train_images[index], train_labels[index]);
 			let F = F(&theta, &b, x);
 			for i in 0..10 {
+				let ey_i= if i == y { 1. } else { 0. };
 				for j in 0..28*28 {
-					theta[i][j] -= -(ey[i] - F[i]*x[j]);
+					G_theta[i][j] += -(ey_i - F[i]*x[j]);
 				}
-				b[i] -= -(ey[i] - F[i]);
+				G_b[i] += -(ey_i - F[i]);
 			}
+		}
+		let learn_rate = 0.005;
+		for i in 0..10 {
+			for j in 0..28*28 {
+				theta[i][j] -= learn_rate * G_theta[i][j] / batch_size as f64;
+			}
+			b[i] -= learn_rate * G_b[i] / batch_size as f64;
 		}
 	}
 	println!("{}s", start.elapsed().as_secs());
 
 	let (images, labels) = set("t10k")?;
 	let matches = images.iter().zip(labels.iter()).filter(|&(image, label)| {
-		let sq = |x| x*x;
 		fn max_position(iter: impl IntoIterator<Item=f64>) -> usize {
 			iter.into_iter().enumerate().max_by(|(_, a),(_, b)| f64::total_cmp(a,b)).map(|(i,_)| i).unwrap()
 		}
-		let distance = |a: &[f64; _], b| a.iter().zip(b).map(|(a,b)| sq(a-b)).sum::<f64>();
-		let prediction = match "feedforward" {
-			"nearest" => { // 82%
-				let prediction = mean_examples.each_ref().map(|example| -distance(example, image));
-				max_position(prediction)
-			},
-			"feedforward" => {
-				let prediction = F(&theta, &b, image);
-				max_position(prediction)
-			},
-			"kNN" => { // slow
-				let mut distances = Vec::from_iter(train().map(|(example, &label)| (distance(image, example), label)));
-				let (k_nearest, _, _) = distances.select_nth_unstable_by(5, |(a,_),(b,_)| f64::total_cmp(a,b));
-				let counts: [_; 10] = std::array::from_fn(|i| k_nearest.into_iter().filter(|(_,j)| i==*j).count());
-				counts.iter().enumerate().max_by(|(_, a),(_, b)| a.cmp(b)).map(|(i,_)| i).unwrap()
-			},
-			_ => unreachable!()
-		};
-		//println!("{prediction} {label}");
+		let prediction = F(&theta, &b, image);
+		let prediction = max_position(prediction);
 		prediction == *label
 	}).count();
 	println!("{matches}/{} = {}%", labels.len(), matches as f64/labels.len() as f64*100.);
