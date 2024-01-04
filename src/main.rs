@@ -1,4 +1,4 @@
-#![feature(array_chunks, generic_arg_infer, array_methods)]#![allow(non_snake_case)]
+#![feature(array_chunks, generic_arg_infer)]#![allow(non_snake_case)]
 use rand::{Rng, thread_rng, seq::SliceRandom};
 
 fn main() -> std::io::Result<()> {
@@ -29,7 +29,7 @@ fn main() -> std::io::Result<()> {
 	let train = set("train")?;
 
 	// Stochastic gradient descent for the logistic regression model
-	fn rand<const N: usize>() -> [f64; N] {thread_rng().gen::<[_; _]>().map(|u:f64| u*2.-1.)}
+	fn rand<const N: usize>() -> [f64; N] { thread_rng().gen::<[_; _]>().map(|u:f64| u*2.-1.) }
 	let mut theta : [[f64; 28*28]; 10] = [(); 10].map(|_| rand());
 	let mut b: [f64; 10] = rand();
 
